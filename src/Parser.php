@@ -356,8 +356,64 @@ final class Parser
     private function parseStringTemplate(): StringTemplate
     {
         $templateValue = $this->advance()->value;
-        // For now, treat as simple string - template interpolation can be added later
-        return new StringTemplate([new StringLiteral($templateValue)]);
+        $parts = [];
+        $current = '';
+        $i = 0;
+        $len = strlen($templateValue);
+
+        while ($i < $len) {
+            if ($i < $len - 1 && $templateValue[$i] === '$' && $templateValue[$i + 1] === '{') {
+                // Save any text before this interpolation
+                if ($current !== '') {
+                    $parts[] = new StringLiteral($current);
+                    $current = '';
+                }
+
+                // Find matching closing brace
+                $i += 2; // Skip ${
+                $braceCount = 1;
+                $exprStr = '';
+
+                while ($i < $len && $braceCount > 0) {
+                    if ($templateValue[$i] === '{') {
+                        $braceCount++;
+                    } elseif ($templateValue[$i] === '}') {
+                        $braceCount--;
+                        if ($braceCount === 0) {
+                            break;
+                        }
+                    }
+                    $exprStr .= $templateValue[$i];
+                    $i++;
+                }
+
+                if ($braceCount !== 0) {
+                    throw new \RuntimeException("Unterminated string template expression");
+                }
+
+                $i++; // Skip closing }
+
+                // Parse the expression
+                $lexer = new Lexer($exprStr);
+                $tokens = $lexer->tokenize();
+                $parser = new Parser($tokens);
+                $program = $parser->parse();
+
+                if (!empty($program->statements)) {
+                    $parts[] = $program->statements[0]->expression ?? $program->statements[0];
+                }
+            } else {
+                $current .= $templateValue[$i];
+                $i++;
+            }
+        }
+
+        // Add any remaining text
+        if ($current !== '') {
+            $parts[] = new StringLiteral($current);
+        }
+
+        return new StringTemplate($parts);
     }
 
     private function parseTrue(): BooleanLiteral

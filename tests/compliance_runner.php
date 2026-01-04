@@ -54,8 +54,37 @@ foreach ($testCategories as $category) {
         $expectedOutput = trim(file_get_contents($outFile));
         $expectedLines = array_filter(explode("\n", $expectedOutput), fn($l) => $l !== '');
 
+        // Parse config directives from script
+        $maxOps = 0;
+        $expectError = false;
+        if (preg_match('/\/\/\s*config:\s*maxOps=(\d+)/', $script, $m)) {
+            $maxOps = (int) $m[1];
+        }
+        if (preg_match('/\/\/\s*expect:\s*error/', $script)) {
+            $expectError = true;
+        }
+
         try {
-            $result = KodiScript::run($script);
+            $builder = KodiScript::builder($script);
+            if ($maxOps > 0) {
+                $builder->withMaxOperations($maxOps);
+            }
+            $result = $builder->execute();
+
+            if ($expectError && !$result->hasErrors()) {
+                echo "❌ FAIL: $testName (expected error, got success)\n";
+                $failed++;
+                $failedTests[] = $testName;
+                continue;
+            }
+
+            if ($expectError && $result->hasErrors()) {
+                // Expected error occurred
+                echo "✅ PASS: $testName\n";
+                $passed++;
+                continue;
+            }
+
             $actualOutput = implode("\n", $result->output);
 
             // Normalize output for comparison
@@ -102,9 +131,14 @@ foreach ($testCategories as $category) {
                 $failedTests[] = $testName;
             }
         } catch (\Throwable $e) {
-            echo "❌ ERROR: $testName - " . $e->getMessage() . "\n";
-            $failed++;
-            $failedTests[] = $testName . ' (error: ' . $e->getMessage() . ')';
+            if ($expectError) {
+                echo "✅ PASS: $testName (expected error)\n";
+                $passed++;
+            } else {
+                echo "❌ ERROR: $testName - " . $e->getMessage() . "\n";
+                $failed++;
+                $failedTests[] = $testName . ' (error: ' . $e->getMessage() . ')';
+            }
         }
     }
 }
