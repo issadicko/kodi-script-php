@@ -123,7 +123,7 @@ final class Natives
         // Encoding functions
         $this->functions['base64Encode'] = fn($str) => base64_encode((string) $str);
         $this->functions['base64Decode'] = fn($str) => base64_decode((string) $str);
-        $this->functions['urlEncode'] = fn($str) => urlencode((string) $str);
+        $this->functions['urlEncode'] = fn($str) => rawurlencode((string) $str);
         $this->functions['urlDecode'] = fn($str) => urldecode((string) $str);
 
         // Crypto functions
@@ -148,6 +148,18 @@ final class Natives
         $this->functions['addDays'] = fn($ts, $days) => (float) $ts + ($days * 86400000);
         $this->functions['addHours'] = fn($ts, $hours) => (float) $ts + ($hours * 3600000);
         $this->functions['diffDays'] = fn($ts1, $ts2) => floor(abs($ts1 - $ts2) / 86400000);
+
+        // Additional string functions
+        $this->functions['repeat'] = fn($str, $times) => str_repeat((string) $str, (int) $times);
+        $this->functions['padLeft'] = fn($str, $len, $pad = ' ') => str_pad((string) $str, (int) $len, $pad, STR_PAD_LEFT);
+        $this->functions['padRight'] = fn($str, $len, $pad = ' ') => str_pad((string) $str, (int) $len, $pad, STR_PAD_RIGHT);
+
+        // Higher-order array functions
+        $this->functions['filter'] = fn($arr, $fn) => $this->filterArray((array) $arr, $fn);
+        $this->functions['map'] = fn($arr, $fn) => $this->mapArray((array) $arr, $fn);
+        $this->functions['reduce'] = fn($arr, $fn, $init) => $this->reduceArray((array) $arr, $fn, $init);
+        $this->functions['find'] = fn($arr, $fn) => $this->findInArray((array) $arr, $fn);
+        $this->functions['findIndex'] = fn($arr, $fn) => $this->findIndexInArray((array) $arr, $fn);
     }
 
     private function printFn(...$args): null
@@ -190,4 +202,66 @@ final class Natives
         });
         return $arr;
     }
+
+    private function filterArray(array $arr, mixed $fn): array
+    {
+        $result = [];
+        foreach ($arr as $item) {
+            $shouldInclude = $this->callFunction($fn, [$item]);
+            if ($shouldInclude) {
+                $result[] = $item;
+            }
+        }
+        return $result;
+    }
+
+    private function mapArray(array $arr, mixed $fn): array
+    {
+        $result = [];
+        foreach ($arr as $item) {
+            $result[] = $this->callFunction($fn, [$item]);
+        }
+        return $result;
+    }
+
+    private function reduceArray(array $arr, mixed $fn, mixed $init): mixed
+    {
+        $acc = $init;
+        foreach ($arr as $item) {
+            $acc = $this->callFunction($fn, [$acc, $item]);
+        }
+        return $acc;
+    }
+
+    private function findInArray(array $arr, mixed $fn): mixed
+    {
+        foreach ($arr as $item) {
+            if ($this->callFunction($fn, [$item])) {
+                return $item;
+            }
+        }
+        return null;
+    }
+
+    private function findIndexInArray(array $arr, mixed $fn): int
+    {
+        foreach ($arr as $i => $item) {
+            if ($this->callFunction($fn, [$item])) {
+                return $i;
+            }
+        }
+        return -1;
+    }
+
+    private function callFunction(mixed $fn, array $args): mixed
+    {
+        if ($fn instanceof FunctionValue && $this->interpreter !== null) {
+            return $this->interpreter->applyFunctionValue($fn, $args);
+        }
+        if (is_callable($fn)) {
+            return $fn(...$args);
+        }
+        throw new \RuntimeException('Expected a function');
+    }
 }
+

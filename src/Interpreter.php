@@ -233,8 +233,8 @@ final class Interpreter
             '*' => (float) $left * (float) $right,
             '/' => (float) $right !== 0.0 ? (float) $left / (float) $right : throw new \RuntimeException("Division by zero"),
             '%' => (float) $left % (float) $right,
-            '==' => $left === $right,
-            '!=' => $left !== $right,
+            '==' => $left == $right,
+            '!=' => $left != $right,
             '<' => $left < $right,
             '<=' => $left <= $right,
             '>' => $left > $right,
@@ -300,6 +300,15 @@ final class Interpreter
             $this->variables = $savedVariables;
         }
     }
+
+    /**
+     * Public method to apply a function value from native functions
+     */
+    public function applyFunctionValue(FunctionValue $fn, array $args): mixed
+    {
+        return $this->applyFunction($fn, $args);
+    }
+
 
     private function evaluateMemberExpr(MemberExpr $node): mixed
     {
