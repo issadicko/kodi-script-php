@@ -1,0 +1,46 @@
+{
+    "name": "issadicko/kodi-script",
+    "description": "A lightweight, embeddable scripting language for PHP applications",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "scripting",
+        "interpreter",
+        "dsl",
+        "embedded",
+        "script",
+        "language",
+        "parser",
+        "expression",
+        "sandbox"
+    ],
+    "authors": [
+        {
+            "name": "Issa Hamadou Dicko",
+            "email": "issadicko@example.com"
+        }
+    ],
+    "homepage": "https://github.com/issadicko/kodi-script-php",
+    "require": {
+        "php": ">=8.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "KodiScript\\": "src/"
+        },
+        "files": [
+            "src/Ast/Nodes.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "KodiScript\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    }
+}
