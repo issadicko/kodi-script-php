@@ -2,6 +2,8 @@
 
 [![Latest Stable Version](https://poser.pugx.org/issadicko/kodi-script/v)](https://packagist.org/packages/issadicko/kodi-script)
 [![License](https://poser.pugx.org/issadicko/kodi-script/license)](https://packagist.org/packages/issadicko/kodi-script)
+[![CI](https://github.com/issadicko/kodi-script-php/actions/workflows/ci.yml/badge.svg)](https://github.com/issadicko/kodi-script-php/actions/workflows/ci.yml)
+
 
 A lightweight, embeddable scripting language for PHP applications.
 
