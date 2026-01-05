@@ -162,14 +162,14 @@ final class Natives
         $this->functions['findIndex'] = fn($arr, $fn) => $this->findIndexInArray((array) $arr, $fn);
     }
 
-    private function printFn(...$args): null
+    private function printFn(...$args): void
     {
         $output = implode(' ', array_map(fn($arg) => $this->stringify($arg), $args));
         if ($this->interpreter !== null) {
             $this->interpreter->addOutput($output);
         }
-        return null;
     }
+
 
     private function stringify(mixed $value): string
     {
