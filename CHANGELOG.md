@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-01-05
+
+### Changed
+- Updated author email in composer.json
+
+---
+
 ## [0.1.0] - 2026-01-04
 
 ### Added
