@@ -360,3 +360,96 @@ final class Program implements Node
         return 'Program';
     }
 }
+
+final class TernaryExpr implements Node
+{
+    public function __construct(
+        public readonly Node $condition,
+        public readonly Node $consequent,
+        public readonly Node $alternative
+    ) {
+    }
+
+    public function getType(): string
+    {
+        return 'TernaryExpr';
+    }
+}
+
+final class SpreadExpr implements Node
+{
+    public function __construct(
+        public readonly Node $value
+    ) {
+    }
+
+    public function getType(): string
+    {
+        return 'SpreadExpr';
+    }
+}
+
+final class BreakStatement implements Node
+{
+    public function getType(): string
+    {
+        return 'BreakStatement';
+    }
+}
+
+final class ContinueStatement implements Node
+{
+    public function getType(): string
+    {
+        return 'ContinueStatement';
+    }
+}
+
+final class TryStatement implements Node
+{
+    public function __construct(
+        public readonly BlockStatement $body,
+        public readonly ?string $catchVar,
+        public readonly BlockStatement $catchBlock
+    ) {
+    }
+
+    public function getType(): string
+    {
+        return 'TryStatement';
+    }
+}
+
+final class ArrayDestructure implements Node
+{
+    /**
+     * @param string[] $names
+     */
+    public function __construct(
+        public readonly array $names,
+        public readonly Node $value
+    ) {
+    }
+
+    public function getType(): string
+    {
+        return 'ArrayDestructure';
+    }
+}
+
+final class ObjectDestructure implements Node
+{
+    /**
+     * @param string[] $names
+     */
+    public function __construct(
+        public readonly array $names,
+        public readonly Node $value
+    ) {
+    }
+
+    public function getType(): string
+    {
+        return 'ObjectDestructure';
+    }
+}

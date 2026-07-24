@@ -21,6 +21,10 @@ final class Lexer
         'for' => TokenType::FOR,
         'in' => TokenType::IN,
         'while' => TokenType::WHILE,
+        'break' => TokenType::BREAK,
+        'continue' => TokenType::CONTINUE,
+        'try' => TokenType::TRY,
+        'catch' => TokenType::CATCH,
     ];
 
     private int $pos = 0;
@@ -64,7 +68,7 @@ final class Lexer
         $char = $this->current();
 
         // String
-        if ($char === '"' || $char === "'") {
+        if ($char === '"' || $char === "'" || $char === '`') {
             return $this->readString($char);
         }
 
@@ -82,10 +86,22 @@ final class Lexer
         $this->advance();
 
         return match ($char) {
-            '+' => new Token(TokenType::PLUS, '+', $startLine, $startColumn),
-            '-' => new Token(TokenType::MINUS, '-', $startLine, $startColumn),
-            '*' => new Token(TokenType::STAR, '*', $startLine, $startColumn),
-            '/' => new Token(TokenType::SLASH, '/', $startLine, $startColumn),
+            '+' => $this->match('+')
+                ? new Token(TokenType::PLUS_PLUS, '++', $startLine, $startColumn)
+                : ($this->match('=')
+                    ? new Token(TokenType::PLUS_EQ, '+=', $startLine, $startColumn)
+                    : new Token(TokenType::PLUS, '+', $startLine, $startColumn)),
+            '-' => $this->match('-')
+                ? new Token(TokenType::MINUS_MINUS, '--', $startLine, $startColumn)
+                : ($this->match('=')
+                    ? new Token(TokenType::MINUS_EQ, '-=', $startLine, $startColumn)
+                    : new Token(TokenType::MINUS, '-', $startLine, $startColumn)),
+            '*' => $this->match('=')
+                ? new Token(TokenType::STAR_EQ, '*=', $startLine, $startColumn)
+                : new Token(TokenType::STAR, '*', $startLine, $startColumn),
+            '/' => $this->match('=')
+                ? new Token(TokenType::SLASH_EQ, '/=', $startLine, $startColumn)
+                : new Token(TokenType::SLASH, '/', $startLine, $startColumn),
             '%' => new Token(TokenType::PERCENT, '%', $startLine, $startColumn),
             '(' => new Token(TokenType::LPAREN, '(', $startLine, $startColumn),
             ')' => new Token(TokenType::RPAREN, ')', $startLine, $startColumn),
@@ -94,7 +110,9 @@ final class Lexer
             '[' => new Token(TokenType::LBRACKET, '[', $startLine, $startColumn),
             ']' => new Token(TokenType::RBRACKET, ']', $startLine, $startColumn),
             ',' => new Token(TokenType::COMMA, ',', $startLine, $startColumn),
-            '.' => new Token(TokenType::DOT, '.', $startLine, $startColumn),
+            '.' => ($this->current() === '.' && $this->peek(1) === '.')
+                ? $this->makeEllipsis($startLine, $startColumn)
+                : new Token(TokenType::DOT, '.', $startLine, $startColumn),
             ':' => new Token(TokenType::COLON, ':', $startLine, $startColumn),
             ';' => new Token(TokenType::SEMICOLON, ';', $startLine, $startColumn),
             '=' => $this->match('=')
@@ -128,7 +146,14 @@ final class Lexer
         if ($this->match(':')) {
             return new Token(TokenType::ELVIS, '?:', $startLine, $startColumn);
         }
-        throw new \RuntimeException("Unexpected character '?' at line {$startLine}, column {$startColumn}");
+        return new Token(TokenType::QUESTION, '?', $startLine, $startColumn);
+    }
+
+    private function makeEllipsis(int $startLine, int $startColumn): Token
+    {
+        $this->advance(); // consume second '.'
+        $this->advance(); // consume third '.'
+        return new Token(TokenType::ELLIPSIS, '...', $startLine, $startColumn);
     }
 
     private function readString(string $quote): Token
@@ -229,6 +254,20 @@ final class Lexer
             } elseif ($char === '/' && $this->peek(1) === '/') {
                 while (!$this->isAtEnd() && $this->current() !== "\n") {
                     $this->advance();
+                }
+            } elseif ($char === '/' && $this->peek(1) === '*') {
+                $this->advance(); // consume '/'
+                $this->advance(); // consume '*'
+                while (!$this->isAtEnd() && !($this->current() === '*' && $this->peek(1) === '/')) {
+                    if ($this->current() === "\n") {
+                        $this->line++;
+                        $this->column = 0;
+                    }
+                    $this->advance();
+                }
+                if (!$this->isAtEnd()) {
+                    $this->advance(); // consume '*'
+                    $this->advance(); // consume '/'
                 }
             } else {
                 break;

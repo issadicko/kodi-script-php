@@ -18,6 +18,8 @@ use KodiScript\Ast\{
     MemberExpr,
     SafeMemberExpr,
     ElvisExpr,
+    TernaryExpr,
+    SpreadExpr,
     ArrayLiteral,
     ObjectLiteral,
     IndexExpr,
@@ -28,6 +30,11 @@ use KodiScript\Ast\{
     ForStatement,
     WhileStatement,
     ReturnStatement,
+    BreakStatement,
+    ContinueStatement,
+    TryStatement,
+    ArrayDestructure,
+    ObjectDestructure,
     BlockStatement,
     ExpressionStatement,
     Program
@@ -78,22 +85,144 @@ final class Parser
             TokenType::RETURN => $this->parseReturnStatement(),
             TokenType::FOR => $this->parseForStatement(),
             TokenType::WHILE => $this->parseWhileStatement(),
+            TokenType::TRY => $this->parseTryStatement(),
+            TokenType::BREAK => $this->parseBreakStatement(),
+            TokenType::CONTINUE => $this->parseContinueStatement(),
             TokenType::LBRACE => $this->parseBlockStatement(),
-            TokenType::IDENTIFIER => $this->peek(1)->type === TokenType::ASSIGN
-            ? $this->parseAssignmentStatement()
-            : $this->parseExpressionStatement(),
+            TokenType::FN => $this->peek(1)->type === TokenType::IDENTIFIER
+                ? $this->parseFunctionDeclaration()
+                : $this->parseExpressionStatement(),
+            TokenType::IDENTIFIER => match (true) {
+                $this->peek(1)->type === TokenType::ASSIGN => $this->parseAssignmentStatement(),
+                in_array($this->peek(1)->type, [
+                    TokenType::PLUS_EQ,
+                    TokenType::MINUS_EQ,
+                    TokenType::STAR_EQ,
+                    TokenType::SLASH_EQ,
+                ], true) => $this->parseCompoundAssignment(),
+                in_array($this->peek(1)->type, [
+                    TokenType::PLUS_PLUS,
+                    TokenType::MINUS_MINUS,
+                ], true) => $this->parseIncDecStatement(),
+                default => $this->parseExpressionStatement(),
+            },
             default => $this->parseExpressionStatement(),
         };
     }
 
-    private function parseLetStatement(): LetStatement
+    private function parseCompoundAssignment(): AssignmentStatement
+    {
+        $name = $this->advance()->value;
+        $op = match ($this->advance()->type) {
+            TokenType::PLUS_EQ => '+',
+            TokenType::MINUS_EQ => '-',
+            TokenType::STAR_EQ => '*',
+            TokenType::SLASH_EQ => '/',
+        };
+        $right = $this->parseExpression();
+        $this->consumeOptionalSemicolon();
+        return new AssignmentStatement($name, new BinaryExpr($op, new Identifier($name), $right));
+    }
+
+    private function parseIncDecStatement(): AssignmentStatement
+    {
+        $name = $this->advance()->value;
+        $op = $this->advance()->type === TokenType::PLUS_PLUS ? '+' : '-';
+        $this->consumeOptionalSemicolon();
+        return new AssignmentStatement(
+            $name,
+            new BinaryExpr($op, new Identifier($name), new NumberLiteral(1.0))
+        );
+    }
+
+    private function parseBreakStatement(): BreakStatement
+    {
+        $this->advance(); // consume 'break'
+        $this->consumeOptionalSemicolon();
+        return new BreakStatement();
+    }
+
+    private function parseContinueStatement(): ContinueStatement
+    {
+        $this->advance(); // consume 'continue'
+        $this->consumeOptionalSemicolon();
+        return new ContinueStatement();
+    }
+
+    private function parseTryStatement(): TryStatement
+    {
+        $this->advance(); // consume 'try'
+        $body = $this->parseBlockStatement();
+        $this->expect(TokenType::CATCH, "Expected 'catch' after try block");
+
+        $catchVar = null;
+        if ($this->match(TokenType::LPAREN)) {
+            $catchVar = $this->expect(TokenType::IDENTIFIER, "Expected catch variable name")->value;
+            $this->expect(TokenType::RPAREN, "Expected ')' after catch variable");
+        }
+
+        $catchBlock = $this->parseBlockStatement();
+        return new TryStatement($body, $catchVar, $catchBlock);
+    }
+
+    private function parseFunctionDeclaration(): LetStatement
+    {
+        $this->advance(); // consume 'fn'
+        $name = $this->advance()->value; // function name
+
+        $this->expect(TokenType::LPAREN, "Expected '(' after function name");
+        $parameters = [];
+        if (!$this->check(TokenType::RPAREN)) {
+            do {
+                $paramName = $this->expect(TokenType::IDENTIFIER, "Expected parameter name")->value;
+                $parameters[] = new Identifier($paramName);
+            } while ($this->match(TokenType::COMMA));
+        }
+        $this->expect(TokenType::RPAREN, "Expected ')' after parameters");
+
+        $body = $this->parseBlockStatement();
+        return new LetStatement($name, new FunctionLiteral($parameters, $body));
+    }
+
+    private function parseLetStatement(): Node
     {
         $this->advance(); // consume 'let'
+
+        // Destructuring: let [a, b] = expr  /  let {x, y} = expr
+        if ($this->check(TokenType::LBRACKET)) {
+            return $this->parseDestructure(true);
+        }
+        if ($this->check(TokenType::LBRACE)) {
+            return $this->parseDestructure(false);
+        }
+
         $name = $this->expect(TokenType::IDENTIFIER, "Expected variable name")->value;
         $this->expect(TokenType::ASSIGN, "Expected '=' after variable name");
         $value = $this->parseExpression();
         $this->consumeOptionalSemicolon();
         return new LetStatement($name, $value);
+    }
+
+    private function parseDestructure(bool $isArray): Node
+    {
+        $open = $isArray ? TokenType::LBRACKET : TokenType::LBRACE;
+        $close = $isArray ? TokenType::RBRACKET : TokenType::RBRACE;
+
+        $this->expect($open, "Expected destructuring pattern");
+        $names = [];
+        if (!$this->check($close)) {
+            do {
+                $names[] = $this->expect(TokenType::IDENTIFIER, "Expected identifier in destructuring pattern")->value;
+            } while ($this->match(TokenType::COMMA));
+        }
+        $this->expect($close, "Expected closing bracket in destructuring pattern");
+        $this->expect(TokenType::ASSIGN, "Expected '=' in destructuring assignment");
+        $value = $this->parseExpression();
+        $this->consumeOptionalSemicolon();
+
+        return $isArray
+            ? new ArrayDestructure($names, $value)
+            : new ObjectDestructure($names, $value);
     }
 
     private function parseAssignmentStatement(): AssignmentStatement
@@ -186,7 +315,21 @@ final class Parser
 
     private function parseExpression(): Node
     {
-        return $this->parseElvis();
+        return $this->parseTernary();
+    }
+
+    private function parseTernary(): Node
+    {
+        $condition = $this->parseElvis();
+
+        if ($this->match(TokenType::QUESTION)) {
+            $consequent = $this->parseTernary();
+            $this->expect(TokenType::COLON, "Expected ':' in ternary expression");
+            $alternative = $this->parseTernary();
+            return new TernaryExpr($condition, $consequent, $alternative);
+        }
+
+        return $condition;
     }
 
     private function parseElvis(): Node
@@ -305,7 +448,7 @@ final class Parser
                 $args = [];
                 if (!$this->check(TokenType::RPAREN)) {
                     do {
-                        $args[] = $this->parseExpression();
+                        $args[] = $this->parseListElement();
                     } while ($this->match(TokenType::COMMA));
                 }
                 $this->expect(TokenType::RPAREN, "Expected ')' after arguments");
@@ -446,12 +589,25 @@ final class Parser
 
         if (!$this->check(TokenType::RBRACKET)) {
             do {
-                $elements[] = $this->parseExpression();
+                $elements[] = $this->parseListElement();
             } while ($this->match(TokenType::COMMA));
         }
 
         $this->expect(TokenType::RBRACKET, "Expected ']' after array elements");
         return new ArrayLiteral($elements);
+    }
+
+    /**
+     * Parses one element of an array literal or argument list, allowing a
+     * spread element (...expr).
+     */
+    private function parseListElement(): Node
+    {
+        if ($this->check(TokenType::ELLIPSIS)) {
+            $this->advance(); // consume '...'
+            return new SpreadExpr($this->parseExpression());
+        }
+        return $this->parseExpression();
     }
 
     private function parseObjectLiteral(): ObjectLiteral
@@ -461,7 +617,11 @@ final class Parser
 
         if (!$this->check(TokenType::RBRACE)) {
             do {
-                $key = $this->expect(TokenType::IDENTIFIER, "Expected property name")->value;
+                $keyToken = $this->current();
+                if ($keyToken->type !== TokenType::IDENTIFIER && $keyToken->type !== TokenType::STRING) {
+                    throw new \RuntimeException("Expected property name, got {$keyToken->type->value} at line {$keyToken->line}");
+                }
+                $key = $this->advance()->value;
                 $this->expect(TokenType::COLON, "Expected ':' after property name");
                 $value = $this->parseExpression();
                 $properties[] = ['key' => $key, 'value' => $value];
