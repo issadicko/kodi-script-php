@@ -13,7 +13,8 @@ final class ScriptResult
     public function __construct(
         public readonly array $output,
         public readonly mixed $value,
-        public readonly array $errors = []
+        public readonly array $errors = [],
+        public readonly ErrorKind $kind = ErrorKind::None
     ) {
     }
 

@@ -22,6 +22,22 @@ enum TokenType: string
     case SLASH = 'SLASH';
     case PERCENT = 'PERCENT';
 
+    // Compound assignment
+    case PLUS_EQ = 'PLUS_EQ';
+    case MINUS_EQ = 'MINUS_EQ';
+    case STAR_EQ = 'STAR_EQ';
+    case SLASH_EQ = 'SLASH_EQ';
+
+    // Increment / decrement
+    case PLUS_PLUS = 'PLUS_PLUS';
+    case MINUS_MINUS = 'MINUS_MINUS';
+
+    // Spread
+    case ELLIPSIS = 'ELLIPSIS';
+
+    // Ternary
+    case QUESTION = 'QUESTION';
+
     // Comparison
     case EQ = 'EQ';
     case NEQ = 'NEQ';
@@ -63,6 +79,10 @@ enum TokenType: string
     case FOR = 'FOR';
     case IN = 'IN';
     case WHILE = 'WHILE';
+    case BREAK = 'BREAK';
+    case CONTINUE = 'CONTINUE';
+    case TRY = 'TRY';
+    case CATCH = 'CATCH';
 
     // Special
     case EOF = 'EOF';

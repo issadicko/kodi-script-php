@@ -17,6 +17,7 @@ $testCategories = [
     'control-flow',
     'control_flow',
     'data_types',
+    'features',
     'functions',
     'higher_order',
     'limits',

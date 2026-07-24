@@ -17,6 +17,9 @@ final class KodiScriptBuilder
     private int $maxOps = 0;
     private int $timeout = 0;
 
+    /** @var (callable(string): void)|null */
+    private $outputSink = null;
+
     public function __construct(string $source)
     {
         $this->source = $source;
@@ -63,37 +66,72 @@ final class KodiScriptBuilder
         return $this;
     }
 
+    /**
+     * Routes each print() line to the given callback. Output is still captured
+     * in ScriptResult::$output. Mirrors Go's WithOutput.
+     */
+    public function withOutput(callable $sink): self
+    {
+        $this->outputSink = $sink;
+        return $this;
+    }
+
     public function execute(): ScriptResult
     {
+        // Parse phase — failures here are classified as parse errors.
         try {
             $lexer = new Lexer($this->source);
             $tokens = $lexer->tokenize();
 
             $parser = new Parser($tokens);
             $ast = $parser->parse();
+        } catch (\Throwable $e) {
+            return new ScriptResult([], null, [$e->getMessage()], ErrorKind::Parse);
+        }
 
-            $natives = Natives::instance();
-            $interpreter = new Interpreter($natives);
-            $natives->setInterpreter($interpreter);
+        $natives = Natives::instance();
+        $interpreter = new Interpreter($natives);
+        $natives->setInterpreter($interpreter);
 
-            $interpreter->setVariables($this->variables);
+        $interpreter->setVariables($this->variables);
 
-            if ($this->maxOps > 0) {
-                $interpreter->setMaxOperations($this->maxOps);
-            }
+        if ($this->maxOps > 0) {
+            $interpreter->setMaxOperations($this->maxOps);
+        }
 
-            if ($this->timeout > 0) {
-                $interpreter->setDeadline(microtime(true) * 1000 + $this->timeout);
-            }
+        if ($this->timeout > 0) {
+            $interpreter->setDeadline(microtime(true) * 1000 + $this->timeout);
+        }
 
-            foreach ($this->functions as $name => $fn) {
-                $interpreter->registerFunction($name, $fn);
-            }
+        if ($this->outputSink !== null) {
+            $interpreter->setOutputSink($this->outputSink);
+        }
 
+        foreach ($this->functions as $name => $fn) {
+            $interpreter->registerFunction($name, $fn);
+        }
+
+        // Run phase.
+        try {
             return $interpreter->run($ast);
         } catch (\Throwable $e) {
-            return new ScriptResult([], null, [$e->getMessage()]);
+            return new ScriptResult(
+                $interpreter->getOutput(),
+                null,
+                [$e->getMessage()],
+                self::classifyError($e)
+            );
         }
+    }
+
+    private static function classifyError(\Throwable $e): ErrorKind
+    {
+        if ($e instanceof LimitsExceededException) {
+            return str_contains($e->getMessage(), 'timeout')
+                ? ErrorKind::Timeout
+                : ErrorKind::MaxOperations;
+        }
+        return ErrorKind::Runtime;
     }
 }
 
